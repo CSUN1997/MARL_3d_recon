@@ -43,7 +43,7 @@ def disparity_map(img1, img2, win_size=5, min_disp=-1, max_disp=63, blockSize=5,
     disp_map = stereo.compute(img1, img2)
     return disp_map
 
-def point_cloud(depth):
+def point_cloud(depth, K, t):
     """Transform a depth image into a point cloud with one point for each
     pixel in the image, using the camera transform for a camera
     centred at cx, cy with field of view fx, fy.
@@ -58,9 +58,11 @@ def point_cloud(depth):
     c, r = np.meshgrid(np.arange(cols), np.arange(rows), sparse=True)
     valid = (depth > 0) & (depth < 255)
     z = np.where(valid, depth / 256.0, np.nan)
-    x = np.where(valid, z * (c - self.cx) / self.fx, 0)
-    y = np.where(valid, z * (r - self.cy) / self.fy, 0)
+    x = np.where(valid, z * (c - t[0]) / K[0, 0], 0)
+    y = np.where(valid, z * (r - t[1]) / K[1, 1], 0)
     return np.dstack((x, y, z))
+
+
 
 if __name__ == '__main__':
     ret, K, dist, img1, img2 = read_params('../camera_params', './imgs/left.jpg', './imgs/right.jpg')
