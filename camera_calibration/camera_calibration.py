@@ -18,7 +18,7 @@ objp = np.zeros((np.prod(chessboard_size),3),dtype=np.float32)
 objp[:,:2] = np.mgrid[0:chessboard_size[0], 0:chessboard_size[1]].T.reshape(-1,2)
 
 #read images
-calibration_paths = glob.glob('./checkerboard/*')
+calibration_paths = glob.glob('../calib_imgs/*')
 #Iterate over images to find intrinsic matrix
 for image_path in calibration_paths:
     #Load image
@@ -36,9 +36,10 @@ for image_path in calibration_paths:
         cv2.cornerSubPix(gray_image, corners, (5,5), (-1,-1), criteria)
         obj_points.append(objp)
         img_points.append(corners)
-
 #Calibrate camera
 ret, K, dist, rvecs, tvecs = cv2.calibrateCamera(obj_points, img_points, gray_image.shape[::-1], None, None)
+print(K)
+
 #Save parameters into numpy file
 np.save("./camera_params/ret", ret)
 np.save("./camera_params/K", K)
