@@ -28,7 +28,7 @@ class ReplayMemory(object):
         self.position = (self.position + 1) % self.capacity
 
     def sample(self, batch_size):
-        return random.sample(self.memory, batch_size)
+        return np.random.sample(self.memory, batch_size)
 
     def __len__(self):
         return len(self.memory)
@@ -103,5 +103,3 @@ class Agent:
         batch = Transition(*zip(*transitions))
 
 
-
-cmake .. -D BUILD_TESTS=OFF -D BUILD_PYTHON=ON -D PYTHON_EXECUTABLE=~/anaconda3/bin/python/ -D PYTHON_PACKAGES_PATH=~/anaconda3/lib/python3.6/site-packages/
