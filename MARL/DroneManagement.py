@@ -29,7 +29,6 @@ class DroneManagement(object):
     def get_state(self):
         return self.client.getMultirotorState(vehicle_name=self.drone)
 
-
     def move_to_pnt(self, x, y, z, velocity=5):
         f = self.client.moveToPositionAsync(x, y, z, velocity, vehicle_name=self.drone)
         f.join()
@@ -47,7 +46,6 @@ class DroneManagement(object):
             airsim.YawMode(False, camera_heading)
         )
         f.join()
-
     
     def get_img(self):
         response = self.client.simGetImages([airsim.ImageRequest("0", airsim.ImageType.Scene, False, False)])[0]
