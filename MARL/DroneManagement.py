@@ -34,7 +34,7 @@ class DroneManagement(object):
         f = self.client.moveToPositionAsync(x, y, z, velocity, vehicle_name=self.drone)
         f.join()
 
-        obj_posi = self.client.simGetObjectPose('OrangeCube').position 
+        obj_posi = self.client.simGetObjectPose('House').position 
         drone_posi = self.client.getMultirotorState().kinematics_estimated.position
 
         dx = drone_posi.x_val - obj_posi.x_val
@@ -69,7 +69,12 @@ class DroneManagement(object):
         self.client.armDisarm(True)
 
     def if_collision(self):
-        return self.client.simGetCollisionInfo().has_collided
+        collision_info = self.client.simGetCollisionInfo()
+        if collision_info.has_collided or (collision_info.object_id != -1):
+            # print(collision_info)
+            print(self.client.getMultirotorState().landed_state)
+            return True
+        return False 
 
 
 class ImgDatabase(object):
@@ -96,9 +101,9 @@ class ImgDatabase(object):
 
     def insert(self, img):
         self.imgs.add(str(self.__img2hash__(img)))
-        cv2.imwrite('imgs/' + str(len(self.imgs)) + '.png', img)
-        if len(self.imgs) % 10 == 0:
-            print('--{} imgs saved'.format(len(self.imgs)))
+        # cv2.imwrite('imgs/' + str(len(self.imgs)) + '.jpg', img)
+        # if len(self.imgs) % 10 == 0:
+        #     print('--{} imgs saved'.format(len(self.imgs)))
 
     def difference(self, img):
         imghash = self.__img2hash__(img)
@@ -106,6 +111,9 @@ class ImgDatabase(object):
         for imgstr in self.imgs:
             dist += np.abs(imghash - self.__hex2hash__(imgstr))
         return dist / len(self.imgs)
+
+    def clean(self):
+        self.imgs = set()
 
 
 class Environment(object):
@@ -125,11 +133,12 @@ class Environment(object):
 
     def reset(self):
         print('RESETTING')
+        self.imgDB.clean()
         self.droneManagement.reset()
         self.droneManagement.takeoff()
 
     def compute_reward(self, position, next_state, alpha=2, beta=5):
-        obj_position = self.droneManagement.client.simGetObjectPose('OrangeCube').position
+        obj_position = self.droneManagement.client.simGetObjectPose('House').position
         obj_position = (obj_position.x_val, obj_position.y_val, obj_position.z_val)
 
         avg_difference = self.imgDB.difference(next_state) / len(self.imgDB)
@@ -140,10 +149,10 @@ class Environment(object):
         # norm_distance = 1 - np.exp(-distance)
         # distance_measure = (norm_distance ** (alpha - 1) * (1 - norm_distance) ** (beta - 1) / special.beta(alpha, beta)) / (beta / alpha)
         distance_measure = 0
-        if distance >= 10:
-            distance_measure = -0.5
-        elif distance <= 2:
-            distance_measure = -0.5
+        if distance >= 50:
+            distance_measure = -10
+        elif distance <= 10:
+            distance_measure = -10
         else:
             distance_measure = 1
 
@@ -154,13 +163,19 @@ class Environment(object):
         location = self.droneManagement.get_location()
         new_location = self.actions[action](*location)
         self.droneManagement.move_to_pnt(*new_location)
+        # try:
         new_img = self.droneManagement.get_img()
         self.imgDB.insert(new_img)
-        ## Calculate reward
         reward = self.compute_reward(self.droneManagement.get_location(), new_img)
+        # except:
+        #     reward = torch.Tensor([0.])
+        ## Calculate reward
         if self.droneManagement.if_collision():
             print('COLLISION')
-            return new_img, True, -10
+            return new_img, True, torch.Tensor([-10.])
+        elif len(self.imgDB) >= 100:
+            ## When the number of images exceeds 50
+            return new_img, True, reward
 
         return new_img, False, reward
 

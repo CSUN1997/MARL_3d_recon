@@ -10,10 +10,19 @@ import torch.optim as optim
 import torch.nn.functional as F
 import torchvision.transforms as T
 from DroneManagement import Environment, ImgDatabase
+import cv2
 
 Transition = namedtuple('Transition',
                         ('state', 'action', 'next_state', 'reward'))
 
+ind2action = {
+    0: 'x+',
+    1: 'x-',
+    2: 'y+',
+    3: 'y-',
+    4: 'z+',
+    5: 'z-'
+}
 
 class ReplayMemory(object):
     def __init__(self, capacity):
@@ -56,7 +65,7 @@ class DQN(nn.Module):
     # Called with either one element to determine next action, or a batch
     # during optimization. Returns tensor([[left0exp,right0exp]...]).
     def forward(self, x):
-        print('forward')
+        # print('forward')
         x = x / 255
         x = F.relu(self.bn1(self.conv1(x)))
         x = F.relu(self.bn2(self.conv2(x)))
@@ -64,7 +73,7 @@ class DQN(nn.Module):
         return self.head(x.view(x.size(0), -1))
 
 class Agent:
-    def __init__(self, n_actions, policy, target, BATCH_SIZE=2, GAMMA=0.999,\
+    def __init__(self, n_actions, policy, target, test=False, BATCH_SIZE=64, GAMMA=0.999,\
         EPS_START=0.9, EPS_END=0.05, EPS_DECAY=200, TARGET_UPDATE=10):
         self.n_actions = n_actions
         self.policy = policy
@@ -76,6 +85,7 @@ class Agent:
         self.EPS_DECAY = EPS_DECAY
         self.TARGET_UPDATE = TARGET_UPDATE
 
+        self.test = test
         self.steps_done = 0
 
     def transform(self, img):
@@ -89,12 +99,12 @@ class Agent:
     ## epsilon greedy
     def select_action(self, state):
         sample = np.random.random()
-        # eps_threshold = self.EPS_END + (self.EPS_START - self.EPS_END) * \
-        #     np.exp(-1. * self.steps_done / self.EPS_DECAY)
-        # self.steps_done += 1
+        eps_threshold = self.EPS_END + (self.EPS_START - self.EPS_END) * \
+            np.exp(-1. * self.steps_done / self.EPS_DECAY)
+        self.steps_done += 1
         # if sample > eps_threshold:
-        if sample > 0.3:
-            print('--greedy')
+        if self.test or sample > eps_threshold:
+            print('--greedy ', end='')
             with torch.no_grad():
                 # t.max(1) will return largest column value of each row.
                 # second column on max result is index of where max element was
@@ -102,15 +112,18 @@ class Agent:
                 inputs = self.transform(state)
                 # return self.policy(self.__transform__(state)).max(1)[1].view(1, 1)
                 action = self.policy(inputs).max(1)[1].view(1, 1).int()
+                print(ind2action[action.item()])
                 # action.dtype = torch.int
                 return action
-        print('--random')
-        return torch.from_numpy(np.asarray([[np.random.randint(self.n_actions)]]))
+        print('--random ', end='')
+        random_action = np.random.randint(self.n_actions)
+        print(ind2action[random_action])
+        return torch.from_numpy(np.asarray([[random_action]]))
 
     def optimize_model(self, memory, optimizer):
         if len(memory) < self.BATCH_SIZE:
-            return
-        print('optimizing')
+            return None
+        # print('optimizing')
         transitions = memory.sample(self.BATCH_SIZE)
         batch = Transition(*zip(*transitions))
         # Compute a mask of non-final states and concatenate the batch elements
@@ -120,7 +133,7 @@ class Agent:
         state_batch = torch.cat(batch.state)
         action_batch = torch.cat(batch.action).long()
         reward_batch = torch.cat(batch.reward)
-        print(reward_batch, state_batch.dtype, non_final_next_states.dtype, non_final_next_states.shape)
+        # print(reward_batch, state_batch.dtype, non_final_next_states.dtype, non_final_next_states.shape)
 
         # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
         # columns of actions taken. These are the actions which would've been taken
@@ -137,7 +150,6 @@ class Agent:
         expected_state_action_values = (next_state_values * self.GAMMA) + reward_batch
         # Compute Huber loss
         loss = F.smooth_l1_loss(state_action_values, expected_state_action_values.unsqueeze(1))
-
         # Optimize the model
         optimizer.zero_grad()
         loss.backward()
@@ -145,34 +157,26 @@ class Agent:
             param.grad.data.clamp_(-1, 1)
         optimizer.step()
 
+        return loss
+    
+    def save_model(self, path, optimizer):
+        torch.save({
+            'policy_state_dict': self.policy.state_dict(),
+            'target_state_dict': self.target.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict()
+        }, path)
 
-if __name__ == '__main__':
-    num_episodes = 10
-    # Initialize the environment and state
-    # drone = 'drone0'
+
+def train(agent, optimizer, save_path, num_episodes=5):
     imgDB = ImgDatabase('average')
     env = Environment(imgDB)
     memory = ReplayMemory(10000)
-    ## output image sie
-    h, w = 144, 256
-    n_actions = 6
-    ## 
-    policy = DQN(h, w, n_actions).float()
-    target = DQN(h, w, n_actions).float()
-    target.load_state_dict(policy.state_dict())
-    target.eval()
 
-    agent = Agent(n_actions, policy, target)
-
-    ## inti state
-    state = env.cur_state()
-    # imgDB.insert(state)
-    print('start training')
-    lr = 0.00001
-    optimizer = optim.Adam(policy.parameters(), lr)
     episode_durations = []
     for i_episode in range(num_episodes):
         env.reset()
+        state = env.cur_state()
+
         for t in count():
             # Select and perform an action
             action = agent.select_action(torch.from_numpy(state))
@@ -184,12 +188,71 @@ if __name__ == '__main__':
             state = next_state
 
             # Perform one step of the optimization (on the target network)
-            agent.optimize_model(memory, optimizer)
+            loss = agent.optimize_model(memory, optimizer)
             if done:
                 print('done episode')
                 episode_durations.append(t + 1)
                 break
+            if (loss is not None) and (t % 5 == 0):
+                print('{}/{} episode | loss: {}'.format(i_episode, num_episodes, loss.item()))
         print('{}th episode'.format(str(i_episode)))
         # Update the target network, copying all weights and biases in DQN
+        
         if i_episode % agent.TARGET_UPDATE == 0:
             target.load_state_dict(policy.state_dict())
+        if save_path != '':
+            try:
+                agent.save_model(save_path, optimizer)
+                print('model saved')
+            except:
+                print('save_path is invalid')
+    return episode_durations
+
+def test(agent, img_path, n_imgs=50):
+    img_count = 0
+    imgDB = ImgDatabase('average')
+    env = Environment(imgDB)
+    env.reset()
+    state = env.cur_state()
+
+    for _ in range(0, n_imgs):
+        action = agent.select_action(torch.from_numpy(state))
+        next_state, done, reward = env.step(action.item())
+        cv2.imwrite(img_path + str(img_count) + '.jpg', next_state)
+        img_count += 1
+        state = next_state
+        if done:
+            print('unexpected termination')
+            return
+
+
+
+if __name__ == '__main__':
+    ## output image sie
+    h, w = 144, 256
+    n_actions = 6
+    ## ============================================================
+    # policy = DQN(h, w, n_actions).float()
+    # target = DQN(h, w, n_actions).float()
+    # target.load_state_dict(policy.state_dict())
+    # target.eval()
+
+    # agent = Agent(n_actions, policy, target)
+
+    # save_path = './model/model'
+
+    # lr = 0.0001
+    # optimizer = optim.Adam(policy.parameters(), lr)
+    
+    # expisode_durations = train(agent, optimizer, save_path)
+    ##==============================================================
+    ## Model save path
+    save_path = './model/model'
+    checkpnt = torch.load(save_path)
+    policy = DQN(h, w, n_actions).float()
+    target = DQN(h, w, n_actions).float()
+    policy.load_state_dict(checkpnt['policy_state_dict'])
+    target.load_state_dict(checkpnt['target_state_dict'])
+    agent = Agent(n_actions, policy, target, test=True)
+
+    test(agent, './imgs/')
