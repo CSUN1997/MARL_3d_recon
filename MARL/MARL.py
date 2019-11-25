@@ -4,6 +4,11 @@ from collections import namedtuple
 from itertools import count
 from PIL import Image
 
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
+import torchvision.transforms as T
 from DroneManagement import Environment, ImgDatabase
 import cv2
 

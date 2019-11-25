@@ -4,24 +4,32 @@ import os
 import pprint
 import imagehash
 import math
-from PIL import Image
 import scipy.special as special
 import torch
 import rospy
 from geometry_msgs.msg import Twist
 from std_msgs.msg import Empty, Bool
+from sensor_msgs.msg import Image
 
 
 class DroneManagement(object):
-    def __init__(self, img_save):
-        self.pub = rospy.Publisher('bebop/cmd_vel', Twist, queue_size = 1)
+    def __init__(self, img_save, drone_name):
+        self.pub = rospy.Publisher(drone_name + '/cmd_vel', Twist, queue_size = 1)
 
-        self.takeoff_pub = rospy.Publisher('bebop/takeoff', Empty, queue_size=1)
-        self.land_pub = rospy.Publisher('bebop/land', Empty, queue_size=1)
+        self.takeoff_pub = rospy.Publisher(drone_name + '/takeoff', Empty, queue_size=1)
+        self.land_pub = rospy.Publisher(drone_name + '/land', Empty, queue_size=1)
         ## Don't know if this works
-        self.navi_home = rospy.Publisher('bebop/autoflight/navigate_home', Bool, queue_size=1)
+        self.navi_home = rospy.Publisher(drone_name + '/autoflight/navigate_home', Bool, queue_size=1)
 
         rospy.init_node('MARL')
+
+        def __imgCallback__(data):
+            img = np.frombuffer(data.data, dtype=np.uint8).reshape((856, 480, -1))
+            cv2.imsave(str(self.img_count) + '.jpg', img)
+
+        ## Read image stream
+        rospy.Subscriber(drone_name + '/image_raw', Image, __imgCallback__)
+        rospy.spin()
         self.speed = rospy.get_param("~speed", 0.5)
         # turn = rospy.get_param("~turn", 1.0)
         self.offset = 1
@@ -38,6 +46,7 @@ class DroneManagement(object):
         ## thus have to record the position incrementally
         self.position = np.asarray([0, 0, 0])
         self.img_save = img_save
+        self.img_count = 0
 
     def takeoff(self):
         self.pub.publish(self.takeoff_pub)
@@ -59,15 +68,6 @@ class DroneManagement(object):
         twist.angular.z = 0
 
         self.pub.publish(twist)
-
-    def __imgCallback__(self, data):
-        '''
-        save bytes as imgs
-        '''
-        pass
-    
-    def get_img(self):
-        pass
     
     def get_position(self):
         return self.position
@@ -80,11 +80,11 @@ class DroneManagement(object):
 
 
 class Environment(object):
-    def __init__(self, droneManagement, grid_len, grid_size, proper_visit=5):
+    def __init__(self, img_save, drone_name, grid_len, grid_size, proper_visit=5):
         self.grid_len = grid_len
         self.grid_size = grid_size
         self.cur_grid = (-1, -1)
-        self.droneManagement = droneManagement
+        self.droneManagement = DroneManagement(img_save, drone_name)
         self.visited = np.zeros(grid_size)
         ## This defines how many times a grid should be visited
         self.proper_visit = proper_visit
