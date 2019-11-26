@@ -11,6 +11,8 @@ from geometry_msgs.msg import Twist
 from std_msgs.msg import Empty, Bool
 from sensor_msgs.msg import Image
 
+from pyparrot.Bebop import Bebop
+
 
 class DroneManagement(object):
     def __init__(self, img_save, drone_name):
@@ -77,6 +79,53 @@ class DroneManagement(object):
 
     # def if_collision(self):
     #     return self.client.simGetCollisionInfo().has_collided
+
+# class DroneManagementPyparrot:
+#     def __init__(self, img_save, drone_name, bebop):
+#         self.offset = 1
+#         ## Suppose the drone never moves on x axis
+#         self.ind2action = {
+#             # 0: np.asarray([self.offset, 0, 0]),
+#             # 1: np.asarray([-self.offset, 0, 0]),
+#             0: np.asarray([0, self.offset, 0]),
+#             1: np.asarray([0, -self.offset, 0]),
+#             2: np.asarray([0, 0, self.offset]),
+#             3: np.asarray([0, 0, -self.offset])
+#         }
+#         self.bebop = bebop
+#         ## record the position of the drone. GPS cannot work inside,
+#         ## thus have to record the position incrementally
+#         self.position = np.asarray([0, 0, 0])
+#         self.img_save = img_save
+#         self.img_count = 0
+
+#     def takeoff(self):
+#         self.bebop.safe_takeoff(10)
+
+#     def land(self):
+#         self.bebop.safe_land(10)
+
+#     def move(self, action):
+#         vec = self.ind2action[action]
+#         ## record the position
+#         self.position += vec
+        
+#         twist = Twist()
+#         twist.linear.x = vec[0] * self.speed
+#         twist.linear.y = vec[1] * self.speed
+#         twist.linear.z = vec[2] * self.speed
+#         twist.angular.x = 0
+#         twist.angular.y = 0
+#         twist.angular.z = 0
+
+#         self.pub.publish(twist)
+    
+#     def get_position(self):
+#         return self.position
+
+#     def reset(self):
+#         self.pub.publish(self.navi_home)
+
 
 
 class Environment(object):

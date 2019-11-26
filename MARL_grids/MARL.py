@@ -46,7 +46,7 @@ class Agent:
         #     A[best_action] += (1.0 - epsilon)
         #     return A
 
-        def policy_fn(observation):
+        def policy_fn(ob0.servation):
             rand = np.random.random()
             if rand >= epsilon:
                 return np.argmax(self.Q[observation[0], observation[1]])
@@ -87,7 +87,7 @@ class Agent:
 if __name__ == '__main__':
     img_save = './imgs'
     drone_name = 'bebop'
-    grid_len = 0.
+    grid_len = 30.
     grid_size = (3, 3)
     num_episodes = 10
     n_actions = 4
