@@ -11,7 +11,12 @@ import cv2
 from PIL import Image
 import time
 
+
 class UserVision:
+'''
+For taking pictures. By default, images keep streaming in and there will be 30 images per sec. The use of imagehash makes
+sure that the drone won't take similar images.
+'''
     def __init__(self, vision):
         self.index = 0
         self.vision = vision
@@ -33,7 +38,6 @@ class UserVision:
             img.dtype = np.uint8
             self.last_hash = imghash
             self.index +=1
-            #print(self.index)
 
 class Environment(object):
     def __init__(self, img_save, grid_len, grid_size, proper_visit=1):
@@ -62,11 +66,8 @@ class Environment(object):
         self.proper_visit = proper_visit
         print('Take off')
         self.bebop.safe_takeoff(10)
-        # time.sleep(3)
-        ## Positive is DOWN, y+ is right
+        ## zPositive is DOWN, y+ is right
         self.bebop.move_relative(0, 0, -0.3, 0)
-
-        self.img_count = 0
 
     def __del__(self):
         self.reset()
@@ -89,24 +90,14 @@ class Environment(object):
         # ## Avoid division by 0
         # return np.sum(1 / np.maximum(distance, np.ones(self.visited.shape) * 1e-5))
         if self.visited[int(self.position[0]), int(self.position[1])] == 0:
-            return 5
+            return 10
         elif self.visited[int(self.position[0]), int(self.position[1])] <= self.proper_visit:
             return 3
         else:
-            return -3
+            return -10
 
     def compute_reward_img_feature(self):
         pass
-    
-    def __is_done__(self):
-        done = False
-        outof_grid = False
-        y, z = self.position[0], self.position[1]
-        if (y < 0) or (y >= self.grid_size[0]) or (z < 0) or (z >= self.grid_size[1]):
-            done, outof_grid = True, True
-        if np.min(self.visited) >= self.proper_visit:
-            done, outof_grid = True, False
-        return done, outof_grid
 
     def emergency(self):
         print('emergency')
@@ -119,21 +110,13 @@ class Environment(object):
         next_z = self.position[1] + movement[1]
         print(next_y, next_z)
         if next_y < 0 or next_y >= self.grid_size[0] or next_z < 0 or next_z >= self.grid_size[1]:
-            return np.zeros(2), -20, True
+            return np.zeros(2), -15, True
         self.bebop.move_relative(0, movement[0] * self.grid_len, movement[1] * self.grid_len, 0)
-        print('picture')
-        # self.bebop.ask_for_state_update()
-        # cv2.imwrite('./imgs/' + str(self.img_count) + '.jpg', self.droneVision.get_latest_valid_picture())
-        self.img_count += 1
         self.position = self.position + np.asarray(movement)
-        # position = self.droneManagement.get_position()
-        # grid_y = position[1] // self.grid_len
-        # grid_z = position[2] // self.grid_len
         
         self.visited[int(self.position[0]), int(self.position[1])] += 1
-        # done, outof_grid = self.__is_done__()
         done = False
-        if np.min(self.visited) >= self.proper_visit:
+        if (np.min(self.visited) >= self.proper_visit) or (np.max(self.visited) >= 10):
             done = True
         ## Calculate reward. If out of grid, assign a negative reward
         reward = self.compute_reward()
@@ -145,7 +128,7 @@ class Agent:
         self.n_actions = n_actions
         # self.Q = np.random.random((grid_size[0], grid_size[1], n_actions)) * 0.001
         if Q_path == '':
-            self.Q = np.zeros((grid_size[0], grid_size[1], n_actions))
+            self.Q = np.zeros((grid_size[0], grid_size[1], grid_size[0], grid_size[1], n_actions))
         else:
             self.Q = np.load(Q_path)
 
@@ -167,7 +150,7 @@ class Agent:
         def policy_fn(observation):
             rand = np.random.random()
             if rand >= epsilon:
-                return np.argmax(self.Q[int(observation[0]), int(observation[1])])
+                return np.argmax(self.Q[int(observation[0]), int(observation[1]), int(observation[2]), int(observation[3]), :])
             return np.random.choice(self.n_actions)
 
         return policy_fn
@@ -242,7 +225,7 @@ class Agent:
             for t in range(100):
                 action = policy(state)
                 next_state, reward, done = env.step(action)
-                episode.append((state.tolist(), action, reward))
+                episode.append((state, action, reward))
                 if done:
                     break
                 state = next_state
@@ -253,42 +236,53 @@ class Agent:
             for state, action in sa_in_episode:
                 sa_pair = (state, action)
                 # Find the first occurance of the (state, action) pair in the episode
-                first_occurence_idx = next((i for i,x in enumerate(episode) if x[0] == state and x[1] == action), None)
+                first_occurence_idx = next((i for i, x in enumerate(episode) if x[0] == state and x[1] == action), None)
                 # Sum up all rewards since the first occurance
-                G = sum([x[2]*(discount_factor**i) for i,x in enumerate(episode[first_occurence_idx:])])
+                G = sum([x[2]*(discount_factor**i) for i, x in enumerate(episode[first_occurence_idx:])])
                 returns_sum[sa_pair] += G
                 returns_count[sa_pair] += 1.0
-                print(returns_sum)
                 # Calculate average return for this state over all sampled episodes
-                self.Q[int(state[0]), int(state[1]), action] = returns_sum[sa_pair] / returns_count[sa_pair]
+                self.Q[int(state[0]), int(state[1]), int(state[2]), int(state[3]), action] = returns_sum[sa_pair] / returns_count[sa_pair]
         
         self.save_Q()
-            
             # The policy is improved implicitly by changing the Q dictionary
         
     
+def test(agent, env):
+    policy = agent.make_epsilon_greedy_policy(0)
+    state = env.reset()
+    print('===============================================')
+    print(env.visited)
+    done = False
+    while not done:
+        action = policy(state)
+        next_state, reward, done = env.step(action)
+        state = next_state
+    print(env.visited)
 
 if __name__ == '__main__':
     img_save = './imgs2'
     grid_len = .3
-    grid_size = (3, 4)
-    num_episodes = 10
+    grid_size = (3, 3)
+    num_episodes = 3000
     n_actions = 4
 
-    env = Environment(img_save, grid_len, grid_size)
-    # env = FakeEnv(grid_size)  
     # env = Environment(img_save, grid_len, grid_size)
-    agent = Agent(grid_size, n_actions, './Q_table.npy')
-    # agent.optimize_model(env, num_episodes)
-    try:
-        agent.optimize_model(env, num_episodes)
-    except:
-        env.emergency()
-    env.bebop.safe_land(10)
-
-    env.bebop.disconnect()
-
+    env = FakeEnv(grid_size)
+    agent = Agent(grid_size, n_actions)
+    agent.optimize_model(env, num_episodes)
     print(env.visited)
+    print(agent.Q.shape)
+
+    test(agent, env)
+    # try:
+    #     agent.optimize_model(env, num_episodes)
+    # except:
+    #     env.emergency()
+    # env.bebop.safe_land(10)
+
+    # env.bebop.disconnect()
+
     # print('================================')
     # print(agent.action_count)
     # print('================================')
