@@ -54,13 +54,10 @@ class FakeEnv(object):
         # grid_z = position[2] // self.grid_len
         # print(self.position)
         self.visited[int(self.position[0]), int(self.position[1])] += 1
-        # done, outof_grid = self.__is_done__()
         reward = self.compute_reward()
         done = False
         if (np.min(self.visited) >= self.proper_visit) or (np.max(self.visited) >= 10):
             reward = -10
             done = True
         ## Calculate reward. If out of grid, assign a negative reward
-        # if self.droneManagement.if_collision():
-            # print('COLLISION')
         return self.get_state(), reward, done
