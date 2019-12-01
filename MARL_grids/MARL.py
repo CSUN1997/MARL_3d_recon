@@ -4,7 +4,7 @@ from itertools import count
 
 from pyparrot.Bebop import Bebop
 from pyparrot.DroneVision import DroneVision
-from DroneManagement_grid import FakeEnv
+from FakeEnv import FakeEnv
 from collections import defaultdict
 import imagehash
 import cv2
@@ -46,16 +46,18 @@ class Environment(object):
         self.bebop.connect(10)
         ## To take pictures
         self.droneVision = DroneVision(self.bebop, is_bebop=True, buffer_size=200)
-        # self.droneVision.open_video()
         self.userVision = UserVision(self.droneVision)
         self.droneVision.set_user_callback_function(self.userVision.save_pictures, user_callback_args=None)
         self.droneVision.open_video()
 
         self.grid_len = grid_len
         self.grid_size = grid_size
-        self.position = np.zeros(2)
-        self.last_position = self.position
-        self.visited = np.zeros((grid_size[0], grid_size[1]), dtype=int)
+        self.position = np.zeros(2, dtype=int)
+        self.visited = np.zeros(grid_size, dtype=int)
+        ## The SIFT features of each grid
+        self.features = np.zeros(grid_size)
+        ## SIFT detector
+        self.sift = cv2.xfeatures2d.SIFT_create()
         ## By grids
         self.ind2action = {
             0: (0, 1),
@@ -69,7 +71,7 @@ class Environment(object):
         print('Take off')
         self.bebop.safe_takeoff(10)
         ## zPositive is DOWN, y+ is right
-        self.bebop.move_relative(0, 0, -1.3, 0)
+        self.bebop.move_relative(0, 0, -1, 0)
 
     def __del__(self):
         self.bebop.move_relative(0, -self.position[0], 0, 0)
@@ -109,7 +111,18 @@ class Environment(object):
             return -10
 
     def compute_reward_img_feature(self):
-        pass
+        img = self.droneVision.get_latest_valid_picture()
+        keypnts = self.sift.detect(img)
+        ## Calculate the imcremental mean of the features
+        last_mu = self.features[self.position[0], self.position[1]]
+        n = self.visited[self.position[0], self.position[1]]
+        mu = (len(keypnts) + n * last_mu - last_mu) / n
+        self.features[self.position[0], self.position[1]] = mu
+
+        if (mu - last_mu) <= 500:
+            return -20
+        else:
+            return 20
 
     def emergency(self):
         self.delete()
@@ -137,6 +150,7 @@ class Environment(object):
         return self.get_state(), reward, done
 
 
+
 class Agent:
     def __init__(self, grid_size, n_actions, Q_path=''):
         self.action_count = np.zeros(n_actions)
@@ -148,7 +162,7 @@ class Agent:
             self.Q = np.load(Q_path)
 
     def save_Q(self):
-        np.save('Q_table.npy', self.Q)
+        np.save('Q_table_feature_reward.npy', self.Q)
 
     def make_epsilon_greedy_policy(self, epsilon):
         """
