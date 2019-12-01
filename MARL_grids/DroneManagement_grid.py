@@ -4,7 +4,7 @@ class FakeEnv(object):
     def __init__(self, grid_size, proper_visit=5):
         self.grid_size = grid_size
         self.position = np.zeros(2)
-        self.visited = np.zeros((grid_size[0], grid_size[1], grid_size[0], grid_size[1]), dtype=int)
+        self.visited = np.zeros((grid_size[0], grid_size[1]), dtype=int)
         ## By grids
         self.ind2action = {
             0: (0, 1),
@@ -37,6 +37,9 @@ class FakeEnv(object):
             return 3
         elif visited_times > self.proper_visit:
             return -10
+
+    # def compute_reward_feature(self, img):
+
     
 
     def step(self, action):

@@ -1,0 +1,30 @@
+ply
+format binary_little_endian 1.0
+comment Running Screened Poisson Reconstruction (Version 8.0)
+comment --in D:/MARL_3d_recon/MARL\dense\0\fused.ply
+comment --depth 13
+comment --out D:/MARL_3d_recon/MARL\dense\0\meshed-poisson.ply
+comment --pointWeight 1.000000
+comment --density
+comment --color 32.000000
+comment #             Tree set in:       0.2 (s),     499.6 (MB)
+comment #      Constraints set in:       0.2 (s),     507.1 (MB)
+comment # Linear system solved in:       0.5 (s),     514.0 (MB)
+comment #        Got triangles in:       0.1 (s),     510.0 (MB)
+comment #             Total Solve:       1.1 (s),     514.0 (MB)
+comment Running Surface Trimmer (V5)
+comment 	--in D:/MARL_3d_recon/MARL\dense\0\meshed-poisson.ply
+comment 	--out D:/MARL_3d_recon/MARL\dense\0\meshed-poisson.ply
+comment 	--trim 10.000000
+comment #Trimmed In:       0.0 (s)
+element vertex 0
+property float x
+property float y
+property float z
+property float value
+property uchar red
+property uchar green
+property uchar blue
+element face 0
+property list uchar int vertex_indices
+end_header
