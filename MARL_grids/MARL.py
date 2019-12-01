@@ -73,7 +73,10 @@ class Environment(object):
         self.bebop.move_relative(0, 0, -0.3, 0)
 
     def __del__(self):
-        self.reset()
+        self.bebop.move_relative(0, -self.position[0], 0, 0)
+        self.delete()
+
+    def delete(self):
         self.bebop.safe_land(10)
         self.bebop.stop_video_stream()
         self.bebop.disconnect()
@@ -83,15 +86,27 @@ class Environment(object):
         self.bebop.move_relative(0, -self.position[0], 0, 0)
         self.bebop.move_relative(0, 0, -self.position[1], 0)
         self.position = np.zeros(2)
+        self.last_position = self.position
         self.visited = np.zeros(self.grid_size)
+        self.visited[0, 0] += 1
         return self.position
 
+    def get_state(self):
+        return self.last_position.tolist() + self.position.tolist()
+
+
     def compute_reward(self):
-        if self.visited[int(self.position[0]), int(self.position[1])] == 0:
-            return 10
-        elif self.visited[int(self.position[0]), int(self.position[1])] <= self.proper_visit:
+        # if np.any(self.visited == 0):
+        #     return -np.sum(self.visited == 0)
+        # distance = np.abs(self.proper_visit - self.visited)
+        # ## Avoid division by 0
+        # return np.sum(1 / np.maximum(distance, np.ones(self.visited.shape) * 1e-5))
+        visited_times = self.visited[int(self.position[0]), int(self.position[1])]
+        if visited_times == 0:
+            return 20
+        elif visited_times <= self.proper_visit:
             return 3
-        else:
+        elif visited_times > self.proper_visit:
             return -10
 
     def compute_reward_img_feature(self):
@@ -109,26 +124,28 @@ class Environment(object):
             return 20
 
     def emergency(self):
-        print('emergency')
-        self.bebop.safe_land(10)
+        self.delete()
 
     def step(self, action):
         movement = self.ind2action[action]
-        print('action: ' + str(action))
         next_y = self.position[0] + movement[0]
         next_z = self.position[1] + movement[1]
         print(next_y, next_z)
         if next_y < 0 or next_y >= self.grid_size[0] or next_z < 0 or next_z >= self.grid_size[1]:
-            return np.zeros(2), -15, True
+            self.last_position = self.position
+            self.position = self.position + np.asarray(movement)
+            return self.get_state(), -20, True
         self.bebop.move_relative(0, movement[0] * self.grid_len, movement[1] * self.grid_len, 0)
+        self.last_position = self.position
         self.position = self.position + np.asarray(movement)
         
         self.visited[int(self.position[0]), int(self.position[1])] += 1
+        reward = self.compute_reward()
         done = False
-        if (np.min(self.visited) >= self.proper_visit) or (np.max(self.visited) >= 10):
+        if (np.min(self.visited) >= self.proper_visit) or (np.max(self.visited) >= 8):
+            reward = -10
             done = True
         ## Calculate reward. If out of grid, assign a negative reward
-        reward = self.compute_reward()
         return self.position, reward, done
 
 
@@ -277,22 +294,18 @@ if __name__ == '__main__':
     num_episodes = 3000
     n_actions = 4
 
-    # env = Environment(img_save, grid_len, grid_size)
-    env = FakeEnv(grid_size)
-    agent = Agent(grid_size, n_actions)
-    agent.optimize_model(env, num_episodes)
-    print(env.visited)
-    print(agent.Q.shape)
+    env = Environment(img_save, grid_len, grid_size)
+    # env = FakeEnv(grid_size)
+    agent = Agent(grid_size, n_actions, './Q_table.npy')
+    # agent.optimize_model(env, num_episodes)
+    # print(env.visited)
+    # print(agent.Q.shape)
 
-    test(agent, env)
-    # try:
-    #     agent.optimize_model(env, num_episodes)
-    # except:
-    #     env.emergency()
-    # env.bebop.safe_land(10)
-
-    # env.bebop.disconnect()
-
+    # test(agent, env)
+    try:
+        agent.optimize_model(env, num_episodes)
+    except:
+        env.emergency()
     # print('================================')
     # print(agent.action_count)
     # print('================================')

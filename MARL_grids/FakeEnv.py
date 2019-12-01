@@ -77,7 +77,4 @@ class FakeEnv(object):
             reward = -10
             done = True
         ## Calculate reward. If out of grid, assign a negative reward
-        # if self.droneManagement.if_collision():
-            # print('COLLISION')
         return self.get_state(), reward, done
-
