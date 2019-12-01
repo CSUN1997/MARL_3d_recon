@@ -2,9 +2,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from itertools import count
 
-from pyparrot.Bebop import Bebop
-from pyparrot.DroneVision import DroneVision
-from DroneManagement_grid import FakeEnv
+# from pyparrot.Bebop import Bebop
+# from pyparrot.DroneVision import DroneVision
+from FakeEnv import FakeEnv
 from collections import defaultdict
 import imagehash
 import cv2
@@ -13,10 +13,10 @@ import time
 
 
 class UserVision:
-'''
-For taking pictures. By default, images keep streaming in and there will be 30 images per sec. The use of imagehash makes
-sure that the drone won't take similar images.
-'''
+    '''
+    For taking pictures. By default, images keep streaming in and there will be 30 images per sec. The use of imagehash makes
+    sure that the drone won't take similar images.
+    '''
     def __init__(self, vision):
         self.index = 0
         self.vision = vision
@@ -45,15 +45,18 @@ class Environment(object):
         self.bebop.connect(10)
         ## To take pictures
         self.droneVision = DroneVision(self.bebop, is_bebop=True, buffer_size=200)
-        # self.droneVision.open_video()
         self.userVision = UserVision(self.droneVision)
         self.droneVision.set_user_callback_function(self.userVision.save_pictures, user_callback_args=None)
         self.droneVision.open_video()
 
         self.grid_len = grid_len
         self.grid_size = grid_size
-        self.position = np.zeros(2)
-        self.visited = np.zeros(grid_size)
+        self.position = np.zeros(2, dtype=int)
+        self.visited = np.zeros(grid_size, dtype=int)
+        ## The SIFT features of each grid
+        self.features = np.zeros(grid_size)
+        ## SIFT detector
+        self.sift = cv2.xfeatures2d.SIFT_create()
         ## By grids
         self.ind2action = {
             0: (0, 1),
@@ -84,11 +87,6 @@ class Environment(object):
         return self.position
 
     def compute_reward(self):
-        # if np.any(self.visited == 0):
-        #     return -np.sum(self.visited == 0)
-        # distance = np.abs(self.proper_visit - self.visited)
-        # ## Avoid division by 0
-        # return np.sum(1 / np.maximum(distance, np.ones(self.visited.shape) * 1e-5))
         if self.visited[int(self.position[0]), int(self.position[1])] == 0:
             return 10
         elif self.visited[int(self.position[0]), int(self.position[1])] <= self.proper_visit:
@@ -97,7 +95,18 @@ class Environment(object):
             return -10
 
     def compute_reward_img_feature(self):
-        pass
+        img = self.droneVision.get_latest_valid_picture()
+        keypnts = self.sift.detect(img)
+        ## Calculate the imcremental mean of the features
+        last_mu = self.features[self.position[0], self.position[1]]
+        n = self.visited[self.position[0], self.position[1]]
+        mu = (len(keypnts) + n * last_mu - last_mu) / n
+        self.features[self.position[0], self.position[1]] = mu
+
+        if (mu - last_mu) <= 500:
+            return -20
+        else:
+            return 20
 
     def emergency(self):
         print('emergency')
@@ -122,6 +131,7 @@ class Environment(object):
         reward = self.compute_reward()
         return self.position, reward, done
 
+
 class Agent:
     def __init__(self, grid_size, n_actions, Q_path=''):
         self.action_count = np.zeros(n_actions)
@@ -133,7 +143,7 @@ class Agent:
             self.Q = np.load(Q_path)
 
     def save_Q(self):
-        np.save('Q_table.npy', self.Q)
+        np.save('Q_table_feature_reward.npy', self.Q)
 
     def make_epsilon_greedy_policy(self, epsilon):
         """
