@@ -294,18 +294,20 @@ if __name__ == '__main__':
     num_episodes = 3000
     n_actions = 4
 
-    env = Environment(img_save, grid_len, grid_size)
-    # env = FakeEnv(grid_size)
-    agent = Agent(grid_size, n_actions, './Q_table.npy')
-    # agent.optimize_model(env, num_episodes)
+    # env = Environment(img_save, grid_len, grid_size)
+    env = FakeEnv(grid_size)
+    agent = Agent(grid_size, n_actions)
+    # agent = Agent(grid_size, n_actions, './Q_table.npy')
+    agent.optimize_model(env, num_episodes)
+    print(env.features)
     # print(env.visited)
     # print(agent.Q.shape)
 
-    # test(agent, env)
-    try:
-        agent.optimize_model(env, num_episodes)
-    except:
-        env.emergency()
+    test(agent, env)
+    # try:
+    #     agent.optimize_model(env, num_episodes)
+    # except:
+    #     env.emergency()
     # print('================================')
     # print(agent.action_count)
     # print('================================')
