@@ -2,8 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from itertools import count
 
-# from pyparrot.Bebop import Bebop
-# from pyparrot.DroneVision import DroneVision
+from pyparrot.Bebop import Bebop
+from pyparrot.DroneVision import DroneVision
 from FakeEnv import FakeEnv
 from collections import defaultdict
 import imagehash
@@ -32,12 +32,13 @@ class UserVision:
             imghash = imagehash.average_hash(Image.fromarray(img))
             if (self.last_hash is not None) and (np.abs(imghash - self.last_hash) <= self.threshold):
                 return
-            filename = "imgs/test_image_%06d.jpg" % self.index
+            filename = "imgs2/test_image_%06d.jpg" % self.index
             # uncomment this if you want to write out images every time you get a new one
             cv2.imwrite(filename, img)
             img.dtype = np.uint8
             self.last_hash = imghash
             self.index +=1
+
 
 class Environment(object):
     def __init__(self, img_save, grid_len, grid_size, proper_visit=1):
@@ -70,7 +71,7 @@ class Environment(object):
         print('Take off')
         self.bebop.safe_takeoff(10)
         ## zPositive is DOWN, y+ is right
-        self.bebop.move_relative(0, 0, -0.3, 0)
+        self.bebop.move_relative(0, 0, -1, 0)
 
     def __del__(self):
         self.bebop.move_relative(0, -self.position[0], 0, 0)
@@ -89,7 +90,7 @@ class Environment(object):
         self.last_position = self.position
         self.visited = np.zeros(self.grid_size)
         self.visited[0, 0] += 1
-        return self.position
+        return self.get_state()
 
     def get_state(self):
         return self.last_position.tolist() + self.position.tolist()
@@ -146,7 +147,8 @@ class Environment(object):
             reward = -10
             done = True
         ## Calculate reward. If out of grid, assign a negative reward
-        return self.position, reward, done
+        return self.get_state(), reward, done
+
 
 
 class Agent:
@@ -175,6 +177,7 @@ class Agent:
         
         """
         def policy_fn(observation):
+            print(observation)
             rand = np.random.random()
             if rand >= epsilon:
                 return np.argmax(self.Q[int(observation[0]), int(observation[1]), int(observation[2]), int(observation[3]), :])
@@ -276,6 +279,7 @@ class Agent:
         
     
 def test(agent, env):
+    # try:
     policy = agent.make_epsilon_greedy_policy(0)
     state = env.reset()
     print('===============================================')
@@ -286,12 +290,17 @@ def test(agent, env):
         next_state, reward, done = env.step(action)
         state = next_state
     print(env.visited)
+    env.emergency()
+    # except Exception as e:
+    #     print(e)
+    #     env.emergency()
+
 
 if __name__ == '__main__':
     img_save = './imgs2'
-    grid_len = .3
+    grid_len = .5
     grid_size = (3, 3)
-    num_episodes = 3000
+    num_episodes = 500
     n_actions = 4
 
     # env = Environment(img_save, grid_len, grid_size)

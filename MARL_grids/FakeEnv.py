@@ -51,6 +51,7 @@ class FakeEnv(object):
     def compute_reward(self):
         visited_times = self.visited[int(self.position[0]), int(self.position[1])]
         if visited_times == 0:
+<<<<<<< HEAD
             return 5
         elif visited_times <= self.max_visit:
             return 1
@@ -59,6 +60,16 @@ class FakeEnv(object):
 
     def compute_reward_imghash(self):
         pass
+=======
+            return 20
+        elif visited_times <= self.proper_visit:
+            return 3
+        elif visited_times > self.proper_visit:
+            return -10
+
+    # def compute_reward_feature(self, img):
+
+>>>>>>> ad6c306b2563721efba16462ddec924c10cf30c8
     
     def compute_reward_img_feature(self):
         y = int(self.position[0])

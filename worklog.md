@@ -17,3 +17,9 @@ I didn't test the drone today (11/27/2019). There might be some small errors in 
 *Two connect to two drones*
 __The main idea is to assign the alienware's network adaptor to one virtual machine and assign the USB adaptor to another virtual machine.__
 Open two virtual machines (which version doesn't matter as long as it can run pyparrot and python), I used ubuntu 14 and 16 last time. Plug in the USB network adaptor. Open wifi connection in the right bottom corner of Windows. There should be a dropdown box with Wifi and Wifi 2. Use Wifi to connect to one drone and Wifi 2 to connect to the other. I've already set the network settings of the vmware. You can run the programs now.
+
+## 12/1/2019 -- Khizar, Archana
+So, we tested the demo on different drones using two VMs. It works. and using the photos 3D reconstructed the boxes inside the net.
+We tried to connect to two drones at the same time. For that, we edited pyparrot.Bebop().connect() function and it now takes two inputs. namely, 'number of tries' and 'IP address' (interface ip address on which to listen for the drone connection).   
+We also created a get_ip_addresses() function in MARL_grids/test.py. It gives you IP addresses of the interfaces connected with the computer right now. This is helpful for calling Bebop.connect()  
+However, we are running into problems so that there is a timeout error whenever we try to connect to multiple drones. We have yet to think about how to remedy this. NOTE THAT ALL THE ABOVE PROCEDURE IS DONE IN WINDOWS CMD (lambda).
